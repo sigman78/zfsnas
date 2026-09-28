@@ -438,6 +438,7 @@ type AppConfig struct {
 	InterlinkRelayMode      bool                  `json:"interlink_relay_mode,omitempty"`    // global relay mode: proxy API calls through local server
 	LXDMetricsEnabled       bool                  `json:"lxd_metrics_enabled,omitempty"`     // turns on LXD's Prometheus endpoint on 127.0.0.1:9101 + portal scraper for VM/container Monitor tabs (v6.4.28)
 	WebSession              WebSessionPolicy      `json:"web_session,omitempty"`             // browser session lifetime policy (default 24h vs sliding inactivity timeout)
+	OIDC                    OIDCConfig            `json:"oidc,omitempty"`                    // single sign-on through an OpenID Connect provider (PocketID etc.)
 	LXDSnapshotPolicies     []LXDSnapshotPolicy   `json:"lxd_snapshot_policies,omitempty"`   // v6.5.19 — per-instance scheduled snapshots
 	ComposeUpdatePolicies   []ComposeUpdatePolicy `json:"compose_update_policies,omitempty"` // per-stack scheduled auto-updates
 	LXDBackupPolicies       []LXDBackupPolicy     `json:"lxd_backup_policies,omitempty"`     // v6.5.19 — per-instance scheduled syncoid backups
@@ -661,7 +662,18 @@ type User struct {
 	UID           *int                 `json:"uid,omitempty"`             // custom Linux UID (nil = auto)
 	GID           *int                 `json:"gid,omitempty"`             // custom Linux GID (nil = auto)
 	StandardPerms *StandardPermissions `json:"standard_perms,omitempty"`  // nil unless role == "standard"
+	// OIDC link. Set the first time this user signs in through the identity
+	// provider; from then on the provider's subject (not the username or
+	// email, which can be renamed) is what identifies them.
+	OIDCIssuer  string `json:"oidc_issuer,omitempty"`
+	OIDCSubject string `json:"oidc_subject,omitempty"`
+	// AuthSource is "oidc" for accounts created automatically on first
+	// single sign-on. Their role follows the provider's groups on every login.
+	AuthSource string `json:"auth_source,omitempty"`
 }
+
+// AuthSourceOIDC marks a user created by OIDC auto-provisioning.
+const AuthSourceOIDC = "oidc"
 
 // EncryptionKey is metadata for a stored ZFS encryption key file.
 // The raw 32-byte key is stored separately in config/keys/<ID>.key.
@@ -888,7 +900,13 @@ func LoadAppConfig() (*AppConfig, error) {
 				}
 			}
 		}
+		if secret.IsEncrypted(cfg.OIDC.ClientSecret) {
+			if plain, err := secret.Decrypt(chapKey, cfg.OIDC.ClientSecret); err == nil {
+				cfg.OIDC.ClientSecret = plain
+			}
+		}
 	}
+	NormaliseOIDC(&cfg.OIDC)
 	return cfg, nil
 }
 
@@ -945,9 +963,10 @@ func SaveAPIKeys(keys []APIKeyEntry) error {
 	return saveJSON("api_keys.json", toWrite)
 }
 
-// SaveAppConfig persists application config, encrypting CHAP credentials if a key is available.
+// SaveAppConfig persists application config, encrypting CHAP credentials and
+// the OIDC client secret if a key is available.
 func SaveAppConfig(cfg *AppConfig) error {
-	if chapKey == nil || len(cfg.ISCSI.Credentials) == 0 {
+	if chapKey == nil || (len(cfg.ISCSI.Credentials) == 0 && cfg.OIDC.ClientSecret == "") {
 		return saveJSON("config.json", cfg)
 	}
 	// Encrypt on a deep copy so we don't modify the caller's config.
@@ -970,6 +989,11 @@ func SaveAppConfig(cfg *AppConfig) error {
 	isciCopy := cfg.ISCSI
 	isciCopy.Credentials = credsCopy
 	cfgCopy.ISCSI = isciCopy
+	if s := cfg.OIDC.ClientSecret; s != "" && !secret.IsEncrypted(s) {
+		if enc, err := secret.Encrypt(chapKey, s); err == nil {
+			cfgCopy.OIDC.ClientSecret = enc
+		}
+	}
 	return saveJSON("config.json", &cfgCopy)
 }
 

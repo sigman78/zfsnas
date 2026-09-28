@@ -127,6 +127,17 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	r.HandleFunc("/api/auth/login", HandleLogin(appCfg)).Methods("POST")
 	r.HandleFunc("/api/auth/totp", HandleTOTPLogin(appCfg)).Methods("POST")
 	r.HandleFunc("/api/auth/logout", HandleLogout).Methods("POST")
+
+	// --- Single sign-on (OIDC: PocketID etc.) ---
+	r.HandleFunc("/api/auth/oidc/info", HandleOIDCInfo(appCfg)).Methods("GET")
+	r.HandleFunc("/api/auth/oidc/login", HandleOIDCLogin(appCfg)).Methods("GET")
+	r.HandleFunc(oidcCallbackPath, HandleOIDCCallback(appCfg)).Methods("GET")
+	r.Handle("/api/settings/oidc",
+		RequireAuth(RequireAdmin(HandleGetOIDCSettings(appCfg)))).Methods("GET")
+	r.Handle("/api/settings/oidc",
+		RequireAuth(RequireAdmin(HandleUpdateOIDCSettings(appCfg)))).Methods("PUT")
+	r.Handle("/api/settings/oidc/test",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestOIDCSettings)))).Methods("POST")
 	r.Handle("/api/auth/me", RequireAuth(http.HandlerFunc(HandleMe))).Methods("GET")
 	r.Handle("/api/prefs", RequireAuth(http.HandlerFunc(HandleUpdatePrefs))).Methods("PUT")
 
@@ -151,6 +162,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(http.HandlerFunc(HandleUpdateUser))).Methods("PUT")
 	r.Handle("/api/users/{id}",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteUser)))).Methods("DELETE")
+	r.Handle("/api/users/{id}/oidc-link",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUnlinkOIDC)))).Methods("DELETE")
 	r.Handle("/api/users/{id}/totp",
 		RequireAuth(http.HandlerFunc(HandleDisableTOTP))).Methods("DELETE")
 

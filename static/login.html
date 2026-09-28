@@ -146,6 +146,22 @@
 
       <div id="alert" class="alert alert-error hidden"></div>
 
+      <!-- Single sign-on (shown only when an OIDC provider is configured) -->
+      <div id="sso-block" style="display:none;">
+        <a href="/api/auth/oidc/login" class="btn btn-primary btn-lg" id="sso-btn"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;"
+           onclick="this.innerHTML='<span class=&quot;spinner&quot;></span> Redirecting…';">
+          <svg class="znas-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+          <span id="sso-label">Sign in with single sign-on</span>
+        </a>
+        <div id="sso-divider" style="display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--text-3);font-size:12px;">
+          <span style="flex:1;height:1px;background:var(--border);"></span>or use a local account<span style="flex:1;height:1px;background:var(--border);"></span>
+        </div>
+        <div id="sso-local-link" style="display:none;text-align:center;margin-top:14px;font-size:13px;">
+          <a href="/login?local=1" style="color:var(--text-3);">Sign in with a local account</a>
+        </div>
+      </div>
+
       <form id="login-form" onsubmit="handleLogin(event)">
         <div class="form-group">
           <label for="username">Username</label>
@@ -204,6 +220,29 @@
       } else {
         document.getElementById('username').focus();
       }
+    })();
+
+    // Offer single sign-on when configured, and show why a previous SSO
+    // attempt bounced back here. The message goes in via textContent only.
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const ssoErr = params.get('sso_error');
+      if (ssoErr) showAlert(ssoErr);
+      try {
+        const resp = await fetch('/api/auth/oidc/info');
+        if (!resp.ok) return;
+        const info = await resp.json();
+        if (!info.enabled) return;
+        document.getElementById('sso-label').textContent = 'Sign in with ' + info.provider_name;
+        document.getElementById('sso-block').style.display = '';
+        // "Hide password login" is a convenience, not a lock: ?local=1 always
+        // brings the form back so the NAS stays reachable if the provider is down.
+        if (info.hide_password_login && params.get('local') !== '1') {
+          document.getElementById('login-form').style.display = 'none';
+          document.getElementById('sso-divider').style.display = 'none';
+          document.getElementById('sso-local-link').style.display = '';
+        }
+      } catch {}
     })();
 
     // Auto-redirect if already logged in.

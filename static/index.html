@@ -6825,6 +6825,70 @@ Select the Console tab to load.</pre>
           </div>
         </div>
 
+        <!-- ── Single Sign-On (OIDC: PocketID etc.) — admin only ── -->
+        <div class="card" id="card-oidc" style="display:none;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:10px;">
+            <div style="min-width:0;">
+              <h3 style="margin-bottom:2px;">Single Sign-On (OIDC)</h3>
+              <div style="font-size:13px;color:var(--text-3);">Sign in through PocketID or another OpenID Connect provider. Password login stays available as a fallback.</div>
+            </div>
+            <i class="info-tip tip-left" data-tip="In your provider, create an OIDC client with the callback URL shown below, then paste its issuer URL, client ID and client secret here.&#10;&#10;On first sign-in a provider identity is linked to the portal user with the same username (or verified email). After that the link follows the provider's account, not the name.&#10;&#10;Signing in through the provider skips the portal's own 2FA — the provider (e.g. PocketID passkeys) is the second factor." style="flex-shrink:0;margin-top:4px;"></i>
+          </div>
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;margin-bottom:14px;">
+            <input type="checkbox" id="oidc-enabled" style="width:15px;height:15px;accent-color:var(--accent-2);"> Enable single sign-on
+          </label>
+          <div class="form-group"><label for="oidc-provider-name">Provider name (login button)</label>
+            <input type="text" id="oidc-provider-name" placeholder="PocketID"></div>
+          <div class="form-group"><label for="oidc-issuer">Issuer URL</label>
+            <div style="display:flex;gap:8px;">
+              <input type="url" id="oidc-issuer" placeholder="https://id.example.com" style="flex:1;min-width:0;">
+              <button class="btn btn-ghost btn-sm" onclick="testOIDCIssuer()">Test</button>
+            </div></div>
+          <div class="form-group"><label for="oidc-client-id">Client ID</label>
+            <input type="text" id="oidc-client-id" autocomplete="off"></div>
+          <div class="form-group"><label for="oidc-client-secret">Client secret</label>
+            <input type="password" id="oidc-client-secret" autocomplete="new-password">
+            <div style="font-size:12px;color:var(--text-3);margin-top:4px;">Stored encrypted. Leave blank to keep the stored secret. With no secret stored, the portal acts as a public (PKCE-only) client.</div></div>
+          <div class="form-group"><label for="oidc-redirect">Callback URL <span style="font-weight:400;color:var(--text-3);">(register this at the provider)</span></label>
+            <input type="url" id="oidc-redirect">
+            <div style="font-size:12px;color:var(--text-3);margin-top:4px;">Leave blank to use the address you reach the portal on (shown greyed out). Set it when the portal sits behind a reverse proxy with a fixed hostname.</div></div>
+          <div class="form-group"><label for="oidc-match">Link existing users by</label>
+            <select id="oidc-match" style="min-width:260px;">
+              <option value="preferred_username">Username (preferred_username)</option>
+              <option value="email">Verified email</option>
+            </select></div>
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;margin-bottom:6px;">
+            <input type="checkbox" id="oidc-hide-password" style="width:15px;height:15px;accent-color:var(--accent-2);"> Hide the password form on the login page
+          </label>
+          <div style="font-size:12px;color:var(--text-3);margin:0 0 14px 22px;">Local accounts can still sign in at <code>/login?local=1</code>.</div>
+
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;margin-bottom:6px;">
+            <input type="checkbox" id="oidc-auto-create" onchange="document.getElementById('oidc-auto-rows').style.display=this.checked?'':'none';" style="width:15px;height:15px;accent-color:var(--accent-2);"> Create portal users automatically from provider groups
+          </label>
+          <div id="oidc-auto-rows" style="display:none;margin-left:22px;">
+            <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">New users are portal-only (no SMB or shell account) and have no password. Their role follows these groups on every sign-in; removing someone from all mapped groups blocks their sign-in.</div>
+            <div class="form-group"><label for="oidc-groups-claim">Groups claim</label>
+              <input type="text" id="oidc-groups-claim" placeholder="groups"></div>
+            <div class="form-group"><label for="oidc-admin-group">Admin group</label>
+              <input type="text" id="oidc-admin-group" placeholder="e.g. znas-admins"></div>
+            <div class="form-group"><label for="oidc-standard-group">Standard user group</label>
+              <input type="text" id="oidc-standard-group" placeholder="e.g. znas-users">
+              <div style="font-size:12px;color:var(--text-3);margin-top:4px;">Standard users start with no permissions; grant them in Users.</div></div>
+            <div class="form-group"><label for="oidc-readonly-group">Read-only group</label>
+              <input type="text" id="oidc-readonly-group" placeholder="e.g. znas-viewers"></div>
+            <div class="form-group"><label for="oidc-default-role">Anyone else</label>
+              <select id="oidc-default-role" style="min-width:260px;">
+                <option value="">Refuse sign-in</option>
+                <option value="read-only">Create as read-only</option>
+                <option value="standard">Create as standard user</option>
+              </select></div>
+          </div>
+          <div id="oidc-error" style="display:none;color:var(--accent-danger);font-size:12px;margin-top:6px;"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+            <button class="btn btn-primary" onclick="saveOIDCSettings()">Save</button>
+          </div>
+        </div>
+
         </div><!-- /stab-panel-security -->
 
         <!-- Tab: Virtualization (v6.4.28) — visible only when LXD is available.
@@ -16445,11 +16509,13 @@ async function loadUsers() {
         ? Object.values(u.standard_perms).filter(Boolean).length : -1;
       const capBadge = capCount >= 0
         ? ` <span style="font-size:10px;background:rgba(10,132,255,0.15);color:var(--accent-2);border-radius:4px;padding:1px 6px;margin-left:4px;">${capCount} cap${capCount===1?'':'s'}</span>` : '';
+      const ssoBadge = u.sso_linked
+        ? ` <span title="${u.sso_managed ? 'Created by single sign-on — role follows provider groups' : 'Linked to a single sign-on account'}" style="font-size:10px;background:rgba(16,185,129,0.15);color:var(--accent-ok, #30d158);border-radius:4px;padding:1px 6px;margin-left:4px;">${u.sso_managed ? 'SSO-managed' : 'SSO'}</span>` : '';
       return `
       <tr>
         <td><div class="user-row-name"><div class="avatar">${u.username[0].toUpperCase()}</div><span>${esc(u.username)}</span></div></td>
         <td class="text-2">${esc(u.email||'—')}</td>
-        <td><span class="badge badge-${roleBadge(u.role)}">${esc(u.role)}</span>${capBadge}</td>
+        <td><span class="badge badge-${roleBadge(u.role)}">${esc(u.role)}</span>${capBadge}${ssoBadge}</td>
         <td class="text-2 text-sm">${formatDate(u.created_at)}</td>
         <td style="text-align:right;">${currentUser.role==='admin' ? `
           <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">
@@ -16492,6 +16558,13 @@ function toggleUserMenu(evt, idx) {
   smbBtn.addEventListener('click', () => { closeUserMenus(); openSMBPasswordModal(u.username); });
   dd.appendChild(smbBtn);
 
+  if (u.sso_linked) {
+    const unlinkBtn = document.createElement('button');
+    unlinkBtn.innerHTML = '<svg class="znas-icon" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-0.14em"><path d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><line x1="8" x2="8" y1="2" y2="5"/><line x1="2" x2="5" y1="8" y2="8"/><line x1="16" x2="16" y1="19" y2="22"/><line x1="19" x2="22" y1="16" y2="16"/></svg> Unlink single sign-on';
+    unlinkBtn.addEventListener('click', () => { closeUserMenus(); unlinkUserSSO(u.id, u.username); });
+    dd.appendChild(unlinkBtn);
+  }
+
   if (u.id !== currentUser.user_id) {
     const sep = document.createElement('hr');
     sep.className = 'menu-sep';
@@ -16510,6 +16583,20 @@ function toggleUserMenu(evt, idx) {
   dd.style.top  = (rect.bottom + 4) + 'px';
   dd.style.left = Math.max(0, rect.right - dd.offsetWidth) + 'px';
   _openUserMenu = { btn, dropdown: dd };
+}
+
+// unlinkUserSSO drops a user's link to their provider identity, so the next
+// single sign-on links afresh (by username / email) or is refused.
+async function unlinkUserSSO(id, username) {
+  try {
+    const r = await fetch('/api/users/' + encodeURIComponent(id) + '/oidc-link', { method: 'DELETE' });
+    const data = await r.json();
+    if (!r.ok) { showToast(data.error || 'Failed to unlink.', 'error'); return; }
+    showToast('Single sign-on unlinked from ' + username + '.', 'success');
+    loadUsers();
+  } catch (e) {
+    showToast('Network error: ' + e.message, 'error');
+  }
 }
 
 let _deleteUserId = '';
@@ -17681,6 +17768,7 @@ async function loadSettings() {
   loadTreeMapScheduleSettings();
   loadNTPStatus();
   loadWebSessionPolicy();
+  loadOIDCSettings();
 }
 
 function checkPortChanged() {
@@ -17978,6 +18066,98 @@ function _applSSHMsg(txt, isErr) {
   el.textContent = txt;
   el.className = 'alert ' + (isErr ? 'alert-error' : 'alert-success');
   el.classList.remove('hidden');
+}
+
+// ── Single Sign-On (OIDC) settings card ─────────────────────────────────────
+async function loadOIDCSettings() {
+  const card = document.getElementById('card-oidc');
+  if (!card) return;
+  if (!currentUser || currentUser.role !== 'admin') { card.style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/settings/oidc');
+    if (!r.ok) return;
+    const c = await r.json();
+    card.style.display = '';
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    document.getElementById('oidc-enabled').checked = !!c.enabled;
+    set('oidc-provider-name', c.provider_name);
+    set('oidc-issuer', c.issuer_url);
+    set('oidc-client-id', c.client_id);
+    set('oidc-client-secret', '');
+    document.getElementById('oidc-client-secret').placeholder = c.has_client_secret ? '•••••••• (stored)' : 'not set';
+    set('oidc-redirect', c.redirect_url);
+    document.getElementById('oidc-redirect').placeholder = c.suggested_callback || '';
+    document.getElementById('oidc-match').value = c.match_claim === 'email' ? 'email' : 'preferred_username';
+    document.getElementById('oidc-hide-password').checked = !!c.hide_password_login;
+    document.getElementById('oidc-auto-create').checked = !!c.auto_create;
+    document.getElementById('oidc-auto-rows').style.display = c.auto_create ? '' : 'none';
+    set('oidc-groups-claim', c.groups_claim);
+    set('oidc-admin-group', c.admin_group);
+    set('oidc-standard-group', c.standard_group);
+    set('oidc-readonly-group', c.read_only_group);
+    document.getElementById('oidc-default-role').value = c.default_role || '';
+    if (typeof csRefresh === 'function') { csRefresh('oidc-match'); csRefresh('oidc-default-role'); }
+    _oidcError('');
+  } catch (_) {}
+}
+
+function _oidcError(msg) {
+  const err = document.getElementById('oidc-error');
+  err.textContent = msg;
+  err.style.display = msg ? '' : 'none';
+}
+
+async function testOIDCIssuer() {
+  _oidcError('');
+  try {
+    const r = await fetch('/api/settings/oidc/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issuer_url: document.getElementById('oidc-issuer').value.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) { _oidcError(data.error || 'Provider test failed.'); return; }
+    showToast('Provider found — its discovery document is valid.', 'success');
+  } catch (e) {
+    _oidcError('Network error: ' + e.message);
+  }
+}
+
+async function saveOIDCSettings() {
+  const val = id => document.getElementById(id).value.trim();
+  const enabled = document.getElementById('oidc-enabled').checked;
+  const body = {
+    enabled,
+    provider_name: val('oidc-provider-name'),
+    issuer_url: val('oidc-issuer'),
+    client_id: val('oidc-client-id'),
+    client_secret: document.getElementById('oidc-client-secret').value,
+    redirect_url: val('oidc-redirect'),
+    match_claim: document.getElementById('oidc-match').value,
+    hide_password_login: document.getElementById('oidc-hide-password').checked,
+    auto_create: document.getElementById('oidc-auto-create').checked,
+    groups_claim: val('oidc-groups-claim'),
+    admin_group: val('oidc-admin-group'),
+    standard_group: val('oidc-standard-group'),
+    read_only_group: val('oidc-readonly-group'),
+    default_role: document.getElementById('oidc-default-role').value,
+  };
+  _oidcError('');
+  try {
+    const r = await fetch('/api/settings/oidc', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) { _oidcError(data.error || 'Failed to save.'); return; }
+    showToast(enabled
+      ? 'Single sign-on saved. Try it in a private window before signing out.'
+      : 'Single sign-on settings saved.', 'success');
+    loadOIDCSettings();
+  } catch (e) {
+    _oidcError('Network error: ' + e.message);
+  }
 }
 
 // ── Web Login Timeout (Security tab card) ───────────────────────────────────

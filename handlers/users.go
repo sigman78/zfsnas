@@ -98,6 +98,10 @@ func HandleListUsers(w http.ResponseWriter, r *http.Request) {
 		// shell is the truth, and it can be changed outside the portal.
 		SSHLogin      bool                        `json:"ssh_login"`
 		StandardPerms *config.StandardPermissions `json:"standard_perms,omitempty"`
+		// SSOLinked: signs in through the OIDC provider. SSOManaged: created
+		// by it, so the role follows the provider's groups.
+		SSOLinked  bool `json:"sso_linked"`
+		SSOManaged bool `json:"sso_managed"`
 	}
 
 	out := make([]safeUser, len(users))
@@ -112,6 +116,8 @@ func HandleListUsers(w http.ResponseWriter, r *http.Request) {
 			SMBHomeFolder: u.SMBHomeFolder,
 			SSHLogin:      system.ShellLoginEnabled(u.Username),
 			StandardPerms: u.StandardPerms,
+			SSOLinked:     u.OIDCSubject != "",
+			SSOManaged:    u.AuthSource == config.AuthSourceOIDC,
 		}
 	}
 	jsonOK(w, out)
