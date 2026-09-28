@@ -46,8 +46,8 @@ Requires a valid session cookie. Admin-only endpoints are marked **[admin]**.
 | `GET` | `/api/auth/sessions` | **[admin]** List all active sessions |
 | `DELETE` | `/api/auth/sessions/{token}` | **[admin]** Revoke a session |
 | `POST` | `/api/auth/setup` | First-run admin account creation |
-| `GET` | `/api/auth/oidc/info` | Public: whether single sign-on is offered, provider name, whether the password form is hidden |
-| `GET` | `/api/auth/oidc/login` | Browser redirect to the OIDC provider (starts single sign-on) |
+| `GET` | `/api/auth/oidc/info` | Public: whether OIDC sign-in is offered, button label, whether the password form is hidden |
+| `GET` | `/api/auth/oidc/login` | Browser redirect to the OIDC provider (starts OIDC sign-in) |
 | `GET` | `/api/auth/oidc/callback` | OIDC redirect target: verifies the provider's answer, then sets the session cookie |
 | `PUT` | `/api/prefs` | Save UI preferences for current user |
 
@@ -59,7 +59,7 @@ Requires a valid session cookie. Admin-only endpoints are marked **[admin]**.
 | `POST` | `/api/users` | **[admin]** Create a user |
 | `PUT` | `/api/users/{id}` | **[admin]** Update user (email, role, password) |
 | `DELETE` | `/api/users/{id}` | **[admin]** Delete a user |
-| `DELETE` | `/api/users/{id}/oidc-link` | **[admin]** Remove a user's link to their single sign-on identity |
+| `DELETE` | `/api/users/{id}/oidc-link` | **[admin]** Remove a user's link to their OIDC identity |
 
 ### API Keys
 
@@ -167,8 +167,8 @@ Requires a valid session cookie. Admin-only endpoints are marked **[admin]**.
 |---|---|---|
 | `GET` | `/api/settings` | Get app settings (port, storage unit, etc.) |
 | `PUT` | `/api/settings` | **[admin]** Update app settings |
-| `GET` | `/api/settings/oidc` | **[admin]** Single sign-on settings (the client secret is never returned) |
-| `PUT` | `/api/settings/oidc` | **[admin]** Save single sign-on settings; an empty `client_secret` keeps the stored one |
+| `GET` | `/api/settings/oidc` | **[admin]** OIDC settings (the client secret is never returned) |
+| `PUT` | `/api/settings/oidc` | **[admin]** Save OIDC settings; an empty `client_secret` keeps the stored one |
 | `POST` | `/api/settings/oidc/test` | **[admin]** Check that an issuer answers OIDC discovery — body: `{"issuer_url":"…"}` |
 | `GET` | `/api/settings/timezone` | Get current timezone and available list |
 | `PUT` | `/api/settings/timezone` | **[admin]** Set system timezone |

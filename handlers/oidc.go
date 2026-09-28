@@ -20,9 +20,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Single sign-on through an OpenID Connect provider (PocketID and friends).
+// Sign-in through an OpenID Connect provider.
 //
-//	GET /api/auth/oidc/info      public: is SSO offered, and under what name
+//	GET /api/auth/oidc/info      public: is OIDC sign-in offered, and the button label
 //	GET /api/auth/oidc/login     redirect the browser to the provider
 //	GET /api/auth/oidc/callback  provider redirects back here with ?code&state
 //
@@ -85,7 +85,7 @@ func oidcRedirectURI(r *http.Request, c config.OIDCConfig) string {
 	return "https://" + r.Host + oidcCallbackPath
 }
 
-// HandleOIDCInfo tells the login page whether to offer single sign-on.
+// HandleOIDCInfo tells the login page whether to offer OIDC sign-in.
 func HandleOIDCInfo(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := appCfg.OIDC
@@ -107,12 +107,12 @@ func HandleOIDCLogin(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := appCfg.OIDC
 		if !c.Ready() {
-			oidcFail(w, r, "Single sign-on is not enabled.")
+			oidcFail(w, r, "OIDC sign-in is not enabled.")
 			return
 		}
 		ar, err := oidc.NewAuthRequest()
 		if err != nil {
-			oidcFail(w, r, "Could not start single sign-on.")
+			oidcFail(w, r, "Could not start OIDC sign-in.")
 			return
 		}
 		redirectURI := oidcRedirectURI(r, c)
@@ -123,9 +123,9 @@ func HandleOIDCLogin(appCfg *config.AppConfig) http.HandlerFunc {
 			audit.Log(audit.Entry{
 				Action:  audit.ActionLoginFailed,
 				Result:  audit.ResultError,
-				Details: "SSO: provider unreachable: " + err.Error() + " (from " + clientIP(r) + ")",
+				Details: "OIDC: provider unreachable: " + err.Error() + " (from " + clientIP(r) + ")",
 			})
-			oidcFail(w, r, c.ProviderName+" is unreachable. Use the password form instead.")
+			oidcFail(w, r, "The OIDC provider is unreachable. Use the password form instead.")
 			return
 		}
 
@@ -168,7 +168,7 @@ func HandleOIDCCallback(appCfg *config.AppConfig) http.HandlerFunc {
 		http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/api/auth/oidc/", HttpOnly: true, Secure: true, MaxAge: -1})
 
 		if !c.Ready() {
-			oidcFail(w, r, "Single sign-on is not enabled.")
+			oidcFail(w, r, "OIDC sign-in is not enabled.")
 			return
 		}
 		if locked, _ := loginLimiter.check(ip); locked {
@@ -181,7 +181,7 @@ func HandleOIDCCallback(appCfg *config.AppConfig) http.HandlerFunc {
 			if d := q.Get("error_description"); d != "" {
 				msg = d
 			}
-			oidcFail(w, r, c.ProviderName+" did not sign you in: "+msg)
+			oidcFail(w, r, "The OIDC provider did not sign you in: "+msg)
 			return
 		}
 
@@ -206,7 +206,7 @@ func HandleOIDCCallback(appCfg *config.AppConfig) http.HandlerFunc {
 		defer cancel()
 		claims, err := oidcProviderFor(c).Exchange(ctx, pending.req, q.Get("code"), pending.redirectURI)
 		if err != nil {
-			oidcDeny(w, r, "", "", "token verification failed: "+err.Error(), "Sign-in through "+c.ProviderName+" failed.")
+			oidcDeny(w, r, "", "", "token verification failed: "+err.Error(), "OIDC sign-in failed.")
 			return
 		}
 
@@ -229,9 +229,9 @@ func HandleOIDCCallback(appCfg *config.AppConfig) http.HandlerFunc {
 		}
 		loginLimiter.recordSuccess(ip)
 		alerts.ResetFailedLogins()
-		details := "via " + c.ProviderName + " SSO from " + ip
+		details := "via OIDC from " + ip
 		if created {
-			details += " (account created from " + c.ProviderName + ")"
+			details += " (account created by OIDC)"
 		}
 		audit.Log(audit.Entry{
 			User:    user.Username,
@@ -247,13 +247,13 @@ func HandleOIDCCallback(appCfg *config.AppConfig) http.HandlerFunc {
 				Action:  audit.ActionCreateUser,
 				Target:  user.Username,
 				Result:  audit.ResultOK,
-				Details: "role: " + user.Role + ", created on first " + c.ProviderName + " sign-in",
+				Details: "role: " + user.Role + ", created on first OIDC sign-in",
 			})
 			go alerts.Send(
 				alerts.EventUserCreated,
 				"User created: "+user.Username,
 				"User Account Created",
-				"User '"+user.Username+"' (role: "+user.Role+") was created on first sign-in through "+c.ProviderName+".",
+				"User '"+user.Username+"' (role: "+user.Role+") was created on first OIDC sign-in.",
 			)
 		}
 		SetSessionCookie(w, sess.Token, hardCap)
@@ -300,7 +300,7 @@ func oidcResolveUser(c config.OIDCConfig, claims *oidc.Claims) (*config.User, bo
 				// losing every mapped group revokes access.
 				role := c.RoleForGroups(groups)
 				if role == "" {
-					return nil, false, &oidcDenied{u.Username, "no mapped " + c.ProviderName + " group", "Your " + c.ProviderName + " account is not in a group allowed to use this portal."}
+					return nil, false, &oidcDenied{u.Username, "no mapped OIDC group", "Your OIDC account is not in a group allowed to use this portal."}
 				}
 				if role != u.Role {
 					oidcApplyRole(u, role)
@@ -334,7 +334,7 @@ func oidcResolveUser(c config.OIDCConfig, claims *oidc.Claims) (*config.User, bo
 		if match.OIDCSubject != "" {
 			// Linked to a different provider identity: never hand it over
 			// just because the name matches.
-			return nil, false, &oidcDenied{match.Username, "account is linked to another " + c.ProviderName + " identity", "This portal account is linked to a different " + c.ProviderName + " account."}
+			return nil, false, &oidcDenied{match.Username, "account is linked to another OIDC identity", "This portal account is linked to a different OIDC account."}
 		}
 		if match.Role == config.RoleSMBOnly {
 			return nil, false, &oidcDenied{match.Username, "SMB-only account", "This account cannot sign in to the portal."}
@@ -350,7 +350,7 @@ func oidcResolveUser(c config.OIDCConfig, claims *oidc.Claims) (*config.User, bo
 			Action:  audit.ActionUpdateUser,
 			Target:  match.Username,
 			Result:  audit.ResultOK,
-			Details: "linked to " + c.ProviderName + " account " + name,
+			Details: "linked to OIDC account " + name,
 		})
 		return match, false, nil
 	}
@@ -361,11 +361,11 @@ func oidcResolveUser(c config.OIDCConfig, claims *oidc.Claims) (*config.User, bo
 	}
 	role := c.RoleForGroups(groups)
 	if role == "" {
-		return nil, false, &oidcDenied{name, "no mapped " + c.ProviderName + " group", "Your " + c.ProviderName + " account is not in a group allowed to use this portal."}
+		return nil, false, &oidcDenied{name, "no mapped OIDC group", "Your OIDC account is not in a group allowed to use this portal."}
 	}
 	username := strings.ToLower(claims.PreferredUsername)
 	if !oidcUsernameRe.MatchString(username) {
-		return nil, false, &oidcDenied{name, "username " + claims.PreferredUsername + " is not a valid portal username", "Your " + c.ProviderName + " username can't be used as a portal username (lowercase letters, digits, . _ - only)."}
+		return nil, false, &oidcDenied{name, "username " + claims.PreferredUsername + " is not a valid portal username", "Your OIDC username can't be used as a portal username (lowercase letters, digits, . _ - only)."}
 	}
 	if config.FindUserByUsername(users, username) != nil {
 		return nil, false, &oidcDenied{username, "username already taken by an unlinked account", "A portal account named " + username + " already exists. Ask an administrator to link it."}
@@ -407,7 +407,7 @@ func oidcDeny(w http.ResponseWriter, r *http.Request, who, subject, reason, user
 	ip := clientIP(r)
 	loginLimiter.recordFailure(ip)
 	alerts.RecordFailedLogin()
-	details := "SSO: " + reason
+	details := "OIDC: " + reason
 	if subject != "" {
 		details += " (subject " + subject + ")"
 	}
@@ -422,7 +422,7 @@ func oidcDeny(w http.ResponseWriter, r *http.Request, who, subject, reason, user
 
 // oidcFail redirects to the login page with a message it shows as plain text.
 func oidcFail(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/login?sso_error="+url.QueryEscape(msg), http.StatusSeeOther)
+	http.Redirect(w, r, "/login?oidc_error="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 // ── Settings (admin) ─────────────────────────────────────────────────────────
@@ -434,7 +434,7 @@ type oidcSettingsView struct {
 	SuggestedCallback string `json:"suggested_callback"`
 }
 
-// HandleGetOIDCSettings returns the SSO settings without the client secret.
+// HandleGetOIDCSettings returns the OIDC settings without the client secret.
 func HandleGetOIDCSettings(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, oidcSettingsView{
@@ -445,7 +445,7 @@ func HandleGetOIDCSettings(appCfg *config.AppConfig) http.HandlerFunc {
 	}
 }
 
-// HandleUpdateOIDCSettings saves the SSO settings. An empty client_secret
+// HandleUpdateOIDCSettings saves the OIDC settings. An empty client_secret
 // keeps the stored one; clear_client_secret removes it.
 func HandleUpdateOIDCSettings(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -483,9 +483,9 @@ func HandleUpdateOIDCSettings(appCfg *config.AppConfig) http.HandlerFunc {
 			Role:    sess.Role,
 			Action:  audit.ActionUpdateSettings,
 			Result:  audit.ResultOK,
-			Details: "single sign-on settings updated (" + state + ", issuer " + next.IssuerURL + ", auto-create " + map[bool]string{true: "on", false: "off"}[next.AutoCreate] + ")",
+			Details: "OIDC settings updated (" + state + ", issuer " + next.IssuerURL + ", auto-create " + map[bool]string{true: "on", false: "off"}[next.AutoCreate] + ")",
 		})
-		jsonOK(w, map[string]string{"message": "single sign-on settings saved"})
+		jsonOK(w, map[string]string{"message": "OIDC settings saved"})
 	}
 }
 
@@ -546,7 +546,7 @@ func validateIssuerURL(issuer string) error {
 }
 
 // HandleUnlinkOIDC removes a user's link to their provider identity, so the
-// next single sign-on links (or is refused) afresh.
+// next OIDC sign-in links (or is refused) afresh.
 func HandleUnlinkOIDC(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	config.LockUsers()
@@ -562,7 +562,7 @@ func HandleUnlinkOIDC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u.AuthSource == config.AuthSourceOIDC && u.PasswordHash == "" {
-		jsonErr(w, http.StatusConflict, "this account was created by single sign-on and has no password; set a password before unlinking it")
+		jsonErr(w, http.StatusConflict, "this account was created by OIDC and has no password; set a password before unlinking it")
 		return
 	}
 	u.OIDCIssuer, u.OIDCSubject, u.AuthSource = "", "", ""
@@ -577,7 +577,7 @@ func HandleUnlinkOIDC(w http.ResponseWriter, r *http.Request) {
 		Action:  audit.ActionUpdateUser,
 		Target:  u.Username,
 		Result:  audit.ResultOK,
-		Details: "single sign-on link removed",
+		Details: "OIDC link removed",
 	})
-	jsonOK(w, map[string]string{"message": "single sign-on link removed"})
+	jsonOK(w, map[string]string{"message": "OIDC link removed"})
 }

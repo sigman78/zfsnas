@@ -128,7 +128,7 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	r.HandleFunc("/api/auth/totp", HandleTOTPLogin(appCfg)).Methods("POST")
 	r.HandleFunc("/api/auth/logout", HandleLogout).Methods("POST")
 
-	// --- Single sign-on (OIDC: PocketID etc.) ---
+	// --- OIDC sign-in ---
 	r.HandleFunc("/api/auth/oidc/info", HandleOIDCInfo(appCfg)).Methods("GET")
 	r.HandleFunc("/api/auth/oidc/login", HandleOIDCLogin(appCfg)).Methods("GET")
 	r.HandleFunc(oidcCallbackPath, HandleOIDCCallback(appCfg)).Methods("GET")

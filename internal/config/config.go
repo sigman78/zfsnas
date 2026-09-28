@@ -438,7 +438,7 @@ type AppConfig struct {
 	InterlinkRelayMode      bool                  `json:"interlink_relay_mode,omitempty"`    // global relay mode: proxy API calls through local server
 	LXDMetricsEnabled       bool                  `json:"lxd_metrics_enabled,omitempty"`     // turns on LXD's Prometheus endpoint on 127.0.0.1:9101 + portal scraper for VM/container Monitor tabs (v6.4.28)
 	WebSession              WebSessionPolicy      `json:"web_session,omitempty"`             // browser session lifetime policy (default 24h vs sliding inactivity timeout)
-	OIDC                    OIDCConfig            `json:"oidc,omitempty"`                    // single sign-on through an OpenID Connect provider (PocketID etc.)
+	OIDC                    OIDCConfig            `json:"oidc,omitempty"`                    // sign-in through an OpenID Connect provider
 	LXDSnapshotPolicies     []LXDSnapshotPolicy   `json:"lxd_snapshot_policies,omitempty"`   // v6.5.19 — per-instance scheduled snapshots
 	ComposeUpdatePolicies   []ComposeUpdatePolicy `json:"compose_update_policies,omitempty"` // per-stack scheduled auto-updates
 	LXDBackupPolicies       []LXDBackupPolicy     `json:"lxd_backup_policies,omitempty"`     // v6.5.19 — per-instance scheduled syncoid backups
@@ -668,7 +668,7 @@ type User struct {
 	OIDCIssuer  string `json:"oidc_issuer,omitempty"`
 	OIDCSubject string `json:"oidc_subject,omitempty"`
 	// AuthSource is "oidc" for accounts created automatically on first
-	// single sign-on. Their role follows the provider's groups on every login.
+	// OIDC sign-in. Their role follows the provider's groups on every login.
 	AuthSource string `json:"auth_source,omitempty"`
 }
 

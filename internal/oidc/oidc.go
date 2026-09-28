@@ -2,7 +2,7 @@
 // authorization-code flow with PKCE, written against the standard library only.
 //
 // It covers exactly what the portal needs to sign users in through an external
-// identity provider such as PocketID: discovery, building the authorization
+// identity provider: discovery, building the authorization
 // URL, exchanging the code at the token endpoint, and verifying the returned
 // ID token (signature against the provider's JWKS, issuer, audience, expiry and
 // nonce). It deliberately does not implement refresh tokens, userinfo or

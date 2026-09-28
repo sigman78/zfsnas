@@ -115,7 +115,7 @@ service account, the portal and its systemd service. See [Installation](#install
 - **HTTPS only**, with a certificate generated on first run, or import your own.
 - **Users and roles**: admin, standard (with 11 granular permissions), read-only and SMB-only, plus control over active sessions.
 - **Two-factor authentication** (TOTP) for any account.
-- **Single sign-on** through PocketID or any OpenID Connect provider, with optional automatic accounts from provider groups. See [SSO.md](SSO.md).
+- **OIDC sign-in** through any OpenID Connect provider, with optional automatic accounts from provider groups. See [OIDC.md](OIDC.md).
 - **Audit log** of every storage, sharing, login and system action.
 - **Sudo hardening**: restrict the portal to exactly the commands it needs. See [SECURITY.md](SECURITY.md).
 - **From the browser**: a web terminal, OS updates (one click or interactive), hostname, timezone and power management.

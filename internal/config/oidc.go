@@ -2,11 +2,11 @@ package config
 
 import "strings"
 
-// OIDCConfig configures single sign-on through an OpenID Connect provider
-// such as PocketID. The portal is a confidential client using the
+// OIDCConfig configures sign-in through an OpenID Connect provider.
+// The portal is a confidential client using the
 // authorization-code flow with PKCE.
 //
-// Signing in through the provider always resolves to a portal user:
+// An OIDC sign-in always resolves to a portal user:
 //   - a user already linked to the provider's subject, or
 //   - an unlinked user whose username (or verified email, see MatchClaim)
 //     equals the provider's claim — linked on first sign-in, or
@@ -15,7 +15,7 @@ import "strings"
 //     DefaultRole; no match and no default means the login is refused).
 type OIDCConfig struct {
 	Enabled      bool   `json:"enabled"`
-	ProviderName string `json:"provider_name,omitempty"` // shown on the login button; default "PocketID"
+	ProviderName string `json:"provider_name,omitempty"` // login button label; default "OIDC"
 	IssuerURL    string `json:"issuer_url,omitempty"`
 	ClientID     string `json:"client_id,omitempty"`
 	ClientSecret string `json:"client_secret,omitempty"` // encrypted at rest; never returned by the API
@@ -51,7 +51,7 @@ func NormaliseOIDC(c *OIDCConfig) {
 	c.RedirectURL = strings.TrimSpace(c.RedirectURL)
 	c.ProviderName = strings.TrimSpace(c.ProviderName)
 	if c.ProviderName == "" {
-		c.ProviderName = "PocketID"
+		c.ProviderName = "OIDC"
 	}
 	if c.MatchClaim != OIDCMatchEmail {
 		c.MatchClaim = OIDCMatchUsername
